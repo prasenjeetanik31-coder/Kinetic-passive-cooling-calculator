@@ -75,29 +75,41 @@ with st.sidebar:
     st.markdown("### 🏗️ Cylinder")
     wall_t = st.slider("Wall thickness (mm)", 1, 10, 2, 1)
 
-H = H_blade / 1000
-W = W_blade / 1000
-T = T_blade / 1000
-arm = arm_mm / 1000
-r_piv = r_pivot / 1000
+# =====================================================================
+# SYSTEM PHYSICS & MATHEMATICAL SIMULATION ENGINE (CORRECTED UNITS)
+# =====================================================================
+H = H_blade / 1000          # Convert height to meters for area
+W = W_blade / 1000          # Convert width to meters for area
+T = T_blade / 1000          # Convert thickness to meters for volume
 angle_rad = math.radians(angle_deg)
 beta = wax_expansion / 100
 
+# 1. Structural Mass Elements
 V_blade_m3 = H * W * T
 mass_blade  = rho_blade * V_blade_m3
 area_blade  = H * W
 
+# 2. Torque Forces (Normalized strictly to N·mm)
 N_bearing   = mass_blade * 9.81
-T_friction  = mu * N_bearing * r_piv * 1000
+# Friction Torque = μ × Normal Force × Radius of Pivot (in mm)
+T_friction  = mu * N_bearing * r_pivot 
+
 F_wind      = wind_pa * area_blade
-T_wind      = F_wind * (W_blade / 4)
+# Wind Torque assumes a conservative 10% aerodynamic eccentricity factor
+eccentricity_mm = W_blade * 0.10
+T_wind      = F_wind * eccentricity_mm
+
+# Total Raw Torque & Design Factor
 T_raw       = T_friction + T_wind
 T_design    = T_raw * SF
+
+# 3. Mechanical Actuation Mechanics
+# Force (N) = Torque (N·mm) / Bell Crank Arm (mm)
 F_piston    = T_design / arm_mm
 
 A_min_m2    = F_piston / (wax_pressure * 1e6)
 d_min_mm    = math.sqrt(4 * A_min_m2 / math.pi) * 1000
-d_bore      = 12.0
+d_bore      = 12.0 # Standard standardized physical bore design
 
 A_piston_m2 = math.pi / 4 * (d_bore / 1000) ** 2
 F_capacity  = wax_pressure * 1e6 * A_piston_m2

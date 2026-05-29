@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import matplotlib.patches as patches
+import matplotlib.transforms as mtransforms
 
 st.set_page_config(
     page_title="Kinetic Passive Cooling — Advanced Actuator Calculator",
@@ -275,7 +276,7 @@ with tab5:
             
             # Matplotlib rotated rectangle patch
             ts = ax_plan.transData
-            tr = plt.transforms.Affine2D().rotate_around(pivot_x, pivot_y, angle_rad) + ts
+            tr = mtransforms.Affine2D().rotate_around(pivot_x, pivot_y, angle_rad) + ts
             
             rect = patches.Rectangle(
                 (pivot_x - W_blade/2, pivot_y - T_blade/2), 

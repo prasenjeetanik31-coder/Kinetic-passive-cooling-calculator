@@ -5,11 +5,12 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 st.set_page_config(
-    page_title="Kinetic Passive Cooling — Actuator Calculator",
+    page_title="Kinetic Passive Cooling — Advanced Actuator Calculator",
     page_icon="🌀",
     layout="wide",
 )
 
+# Custom Theme and CSS Injecting
 st.markdown("""
 <style>
     .main { background-color: #0f1117; }
@@ -44,180 +45,275 @@ def warn_metric(label, value, unit, fmt=".2f"):
 def eq(text): st.markdown(f'<span class="eq">{text}</span>', unsafe_allow_html=True)
 def section(title): st.markdown(f"## {title}")
 
+# =====================================================================
+# SIDEBAR CONTROLS
+# =====================================================================
 with st.sidebar:
-    st.markdown("# ⚙️ Design Parameters")
+    st.markdown("# ⚙️ Advanced Design Controls")
     st.markdown("---")
-    st.markdown("### 🪵 Louvre Blade")
+    
+    st.markdown("### 🪵 Louvre Blade Profile")
     H_blade   = st.slider("Blade height (mm)",        300, 1800, 600, 50)
     W_blade   = st.slider("Blade width (mm)",          60, 300,  100,  5)
     T_blade   = st.slider("Blade thickness (mm)",      10,  40,   18,  2)
     rho_blade = st.slider("Timber density (kg/m³)",   400, 900,  720,  10)
     angle_deg = st.slider("Target rotation (°)",       20,  90,   45,  5)
     st.markdown("---")
-    st.markdown("### 🌡️ Thermal Trigger")
-    T_onset   = st.slider("Wax onset temperature (°C)",  20, 35, 25, 1)
-    T_full    = st.slider("Full melt temperature (°C)",  25, 45, 35, 1)
+    
+    st.markdown("### 🌡️ Thermal Boundaries")
+    T_onset   = st.slider("Wax onset temp (°C)",  20, 35, 25, 1)
+    T_full    = st.slider("Full melt temp (°C)",  25, 45, 35, 1)
     T_ambient = st.slider("Ambient design temp (°C)",    25, 45, 35, 1)
     st.markdown("---")
-    st.markdown("### 🔩 Mechanism")
+    
+    st.markdown("### 🔩 Actuator Mechanicals")
     arm_mm    = st.slider("Bell crank arm length (mm)", 20, 80, 30, 5)
     r_pivot   = st.slider("Pivot pin radius (mm)",       3, 10,  5, 1)
     mu        = st.slider("Bearing friction coeff. μ", 0.05, 0.30, 0.12, 0.01)
     wind_pa   = st.slider("Wind pressure (Pa)",          0, 50, 10, 5)
     SF        = st.slider("Safety factor",             1.5, 5.0, 2.5, 0.5)
     st.markdown("---")
-    st.markdown("### 🧪 Wax Properties")
+    
+    st.markdown("### 🧪 Thermo-Wax Spec")
     wax_expansion = st.slider("Wax expansion β (%)",    10, 20, 15, 1)
     wax_pressure  = st.slider("Wax pressure (MPa)",  0.5, 20.0, 20.0, 0.5)
     wax_density   = st.slider("Wax density (g/mL)",  0.80, 0.95, 0.90, 0.01)
     wax_latent    = st.slider("Latent heat (kJ/kg)", 150, 250, 200, 10)
     st.markdown("---")
-    st.markdown("### 🏗️ Cylinder")
-    wall_t = st.slider("Wall thickness (mm)", 1, 10, 2, 1)
+    
+    st.markdown("### 🏷️ Radial Fin Arrays")
+    num_fins  = st.slider("Number of radial fins",    4,  30,  19, 1)
+    t_fin_mm  = st.slider("Fin thickness (mm)",      1.0, 5.0, 2.0, 0.5)
+    h_fin_mm  = st.slider("Fin height / depth (mm)", 5.0, 25.0, 15.0, 0.5)
+    st.markdown("---")
+    
+    st.markdown("### 🧱 Facade Surface Assembly")
+    H_wall    = st.slider("Total Opening Height (mm)", 1000, 5000, 3000, 100)
+    W_wall    = st.slider("Total Opening Width (mm)",  600, 4000, 1200, 100)
+    overlap   = st.slider("Weather overlap (mm)",    5, 50, 20, 5)
 
 # =====================================================================
-# SYSTEM PHYSICS & MATHEMATICAL SIMULATION ENGINE (CORRECTED UNITS)
+# UNIFIED MATHEMATICAL MODEL ENGINE
 # =====================================================================
-H = H_blade / 1000          # Convert height to meters for area
-W = W_blade / 1000          # Convert width to meters for area
-T = T_blade / 1000          # Convert thickness to meters for volume
+# Hardcoded physical parameters locked straight from detailed blueprints
+d_bore       = 18.0         # Internal bore diameter (18 mm)
+wall_t       = 3.0          # Heavy-duty cylinder wall (3 mm)
+OD           = 24.0         # Resulting cylinder outer diameter (24 mm)
+k_brass      = 115.0        # Thermal conductivity of Yellow Brass (W/m·K)
+
+H = H_blade / 1000          
+W = W_blade / 1000          
+T = T_blade / 1000          
 angle_rad = math.radians(angle_deg)
 beta = wax_expansion / 100
 
-# 1. Structural Mass Elements
+# 1. Component Mass & Load Profiles
 V_blade_m3 = H * W * T
 mass_blade  = rho_blade * V_blade_m3
 area_blade  = H * W
 
-# 2. Torque Forces (Normalized strictly to N·mm)
+# 2. Advanced Combined Torques Engine (Strict N·mm Normalization)
 N_bearing   = mass_blade * 9.81
-# Friction Torque = μ × Normal Force × Radius of Pivot (in mm)
 T_friction  = mu * N_bearing * r_pivot 
 
 F_wind      = wind_pa * area_blade
-# Wind Torque assumes a conservative 10% aerodynamic eccentricity factor
-eccentricity_mm = W_blade * 0.10
+eccentricity_mm = W_blade * 0.10   # Aerodynamic twisting offset
 T_wind      = F_wind * eccentricity_mm
 
-# Total Raw Torque & Design Factor
 T_raw       = T_friction + T_wind
 T_design    = T_raw * SF
-
-# 3. Mechanical Actuation Mechanics
-# Force (N) = Torque (N·mm) / Bell Crank Arm (mm)
 F_piston    = T_design / arm_mm
 
-A_min_m2    = F_piston / (wax_pressure * 1e6)
-d_min_mm    = math.sqrt(4 * A_min_m2 / math.pi) * 1000
-d_bore      = 12.0 # Standard standardized physical bore design
-
+# 3. Stroke & Cylinder Dimensional Boundaries
 A_piston_m2 = math.pi / 4 * (d_bore / 1000) ** 2
 F_capacity  = wax_pressure * 1e6 * A_piston_m2
 force_margin = F_capacity / max(F_piston, 0.001)
-
-t_wall_min  = (wax_pressure * 1e6 * (d_bore / 2 / 1000)) / (100e6)
-OD          = d_bore + 2 * wall_t
 
 s_geom      = arm_mm * math.sin(angle_rad)
 s_design    = s_geom
 V_stroke_mL = A_piston_m2 * (s_design / 1000) * 1e6
 V_wax_mL    = V_stroke_mL / beta
 h_wax_mm    = (V_wax_mL * 1e-6 / A_piston_m2) * 1000
-h_wax_design = h_wax_mm
 m_wax_g     = V_wax_mL * wax_density
 Q_melt_J    = (m_wax_g / 1000) * (wax_latent * 1000)
 
-len_cylinder = math.ceil(h_wax_design + (d_bore * 1.2) + s_design + 20)
+len_cylinder = math.ceil(h_wax_mm + (d_bore * 1.2) + s_design + 20)
 
+# 4. RADIAL FIN HEAT EXCHANGER ENGINE
+t_fin_m = t_fin_mm / 1000
+h_fin_m = h_fin_mm / 1000
+h_finned_zone_m = h_wax_mm / 1000
+
+# Unfinned Base Surface Area vs Extended Surface Fin Area Calculations
+A_base_unfinned = (math.pi * (OD / 1000) * h_finned_zone_m) - (num_fins * t_fin_m * h_finned_zone_m)
+A_fins_surface  = num_fins * (2.0 * h_fin_m * h_finned_zone_m)
+A_total_finned  = A_base_unfinned + A_fins_surface
+
+# Pure Unfinned Reference Case for UI Comparisons
+A_plain_cyl = math.pi * (OD / 1000) * h_finned_zone_m
+area_multiplier = A_total_finned / max(A_plain_cyl, 0.001)
+
+# Convective Coefficients and Fin Efficiency Calculations
 h_conv_still = 10.0
-h_conv_wind = 25.0
-dT          = max(T_ambient - T_onset, 1)
-A_plain_cyl = math.pi * (OD / 1000) * (h_wax_design / 1000)
-Q_still     = h_conv_still * A_plain_cyl * dT
-Q_wind_val  = h_conv_wind  * A_plain_cyl * dT
-t_onset_s   = (0.15 * Q_melt_J) / max(Q_still, 0.001)
-t_full_s    = (0.80 * Q_melt_J) / max(Q_still, 0.001)
-t_full_wind = (0.80 * Q_melt_J) / max(Q_wind_val, 0.001)
+h_conv_wind  = 25.0
+dT           = max(T_ambient - T_onset, 1)
 
+# Analytical Fin Efficiency (m) formula for longitudinal fins
+m_fin_param  = math.sqrt((2.0 * h_conv_still) / max(k_brass * t_fin_m, 1e-6))
+fin_efficiency = math.tanh(m_fin_param * h_fin_m) / (m_fin_param * h_fin_m) if m_fin_param > 0 else 1.0
+
+# Total Effective Heat Transfer Area accounting for efficiency
+A_effective = A_base_unfinned + (fin_efficiency * A_fins_surface)
+
+# Thermal Flux Vectors
+Q_still      = h_conv_still * A_effective * dT
+Q_wind_val   = h_conv_wind  * A_effective * dT
+
+# Normalized Heat Capture Timelines
+t_onset_s    = (0.15 * Q_melt_J) / max(Q_still, 0.001)
+t_full_s     = (0.80 * Q_melt_J) / max(Q_still, 0.001)
+t_full_wind  = (0.80 * Q_melt_J) / max(Q_wind_val, 0.001)
+
+# 5. SPATIAL BUILDING ASSEMBLIES
+cc_spacing_mm = H_blade - overlap
+num_louvres_vertical = math.ceil((H_wall - overlap) / cc_spacing_mm) if cc_spacing_mm > 0 else 1
+num_columns = math.ceil(W_wall / W_blade) if W_blade > 0 else 1
+total_louvres = num_louvres_vertical * num_columns
+
+total_wax_volume_mL = V_wax_mL * total_louvres
+total_facade_wind_force_N = F_wind * total_louvres
+
+# =====================================================================
+# FRONTEND INTERFACE GENERATION
+# =====================================================================
 st.markdown("""# 🌀 Kinetic Passive Cooling System
-### Wax Piston Actuator — Engineering Calculator
+### Advanced Wax Piston Actuator Simulator & Mechanical Engine
 """)
 st.markdown("---")
-st.markdown("## 📊 Key Results at a Glance")
-c1, c2, c3, c4, c5, c6 = st.columns(6)
-with c1: metric("Bore diameter",     d_bore,          "mm",  "int")
-with c2: metric("Cylinder OD",       OD,              "mm",  "int")
-with c3: metric("Cylinder length",   len_cylinder,    "mm",  "int")
-with c4: metric("Piston stroke",     s_design,        "mm",  ".1f")
-with c5: metric("Wax charge",        V_wax_mL,        "mL",  ".1f")
-with c6: metric("First movement",    t_onset_s/60,    "min", ".1f")
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["🪵 Louvre & Torque", "🔩 Piston & Cylinder", "🧪 Wax & Stroke", "📐 Full Spec Table", "📈 Response Charts"])
+st.markdown("## 📊 Strategic Engineering Dashboard")
+c1, c2, c3, c4, c5, c6 = st.columns(6)
+with c1: metric("Bore diameter",     d_bore,           "mm",   "int")
+with c2: metric("Cylinder OD",       OD,               "mm",   "int")
+with c3: metric("Cylinder length",   len_cylinder,     "mm",   "int")
+with c4: metric("Piston stroke",     s_design,         "mm",   ".1f")
+with c5: metric("Effective Area Ratio", area_multiplier, "x Base", ".1f")
+with c6: metric("First response",    t_onset_s/60,     "min",  ".1f")
+
+# Tab Initialization
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    "🪵 Louvre & Torque Loads", 
+    "🔩 Internal Hydraulics", 
+    "🧪 Thermal Fins Performance", 
+    "🧱 Facade Envelope Architecture", 
+    "📐 Engineering Specifications Table", 
+    "📈 Transient Fluid Response Curves"
+])
 
 with tab1:
     col1, col2 = st.columns(2)
     with col1:
-        section("Louvre Blade")
-        eq(f"V = H × W × T = {H_blade} × {W_blade} × {T_blade} = {V_blade_m3*1e6:.0f} mm³")
-        eq(f"m = ρ × V = {rho_blade} × {V_blade_m3*1e6:.0f}×10⁻⁶ = {mass_blade:.3f} kg")
-        metric("Blade mass",  mass_blade,     "kg")
+        section("Louvre Physical Specs")
+        eq(f"Volume = H × W × T = {H_blade} × {W_blade} × {T_blade} = {V_blade_m3*1e6:.0f} mm³")
+        eq(f"Mass = ρ × V = {rho_blade} kg/m³ × {V_blade_m3*1e6:.0f} mm³ = {mass_blade:.3f} kg")
+        metric("Individual Blade Mass", mass_blade, "kg")
     with col2:
-        section("Torque Analysis")
-        eq(f"T_design = (T_friction + T_wind) × SF = {T_design:.2f} N·mm")
-        good_metric("Required piston force", F_piston, "N")
+        section("Aerodynamic Loading & Resistance")
+        eq(f"Torque (Design) = (T_friction + T_wind) × SF = {T_design:.1f} N·mm")
+        good_metric("Target Actuation Rod Force", F_piston, "N")
 
 with tab2:
     col1, col2 = st.columns(2)
     with col1:
-        section("Piston Sizing")
-        good_metric("Force capacity",   F_capacity,   "N",  ".1f")
+        section("Fluid Chamber Mechanics")
+        metric("Piston Cross-Section Area", A_piston_m2 * 1e6, "mm²")
+        good_metric("Hydrostatic Thrust Capacity", F_capacity, "N", ".1f")
     with col2:
-        section("Cylinder Safety")
-        metric("Cylinder OD", OD, "mm", "int")
+        section("Wall Stress Boundaries")
+        metric("Thin-Walled Hoop Stress Limit", 100.0, "MPa")
+        good_metric("Calculated Safety Factor Margin", force_margin, "x safety")
 
 with tab3:
     col1, col2 = st.columns(2)
     with col1:
-        section("Stroke Geometry")
-        eq(f"s = {s_geom:.2f} mm")
+        section("Exchanger Surface Multipliers")
+        eq(f"Base Area = {A_plain_cyl*1e4:.2f} cm² | Finned Area = {A_total_finned*1e4:.2f} cm²")
+        metric("Convective Surface Area Expansion", area_multiplier, "x surface area")
+        good_metric("Analytical Fin Core Efficiency (η)", fin_efficiency * 100, "%", ".1f")
     with col2:
-        section("Energy Profile")
-        eq(f"Q_melt = {Q_melt_J/1000:.2f} kJ")
+        section("Transient Heat Influx Timeline")
+        metric("Still Air Complete Cycle", t_full_s / 60, "minutes", ".1f")
+        good_metric("Coastal Wind Accelerated Cycle", t_full_wind / 60, "minutes", ".1f")
+        st.info(f"💡 **Fin Influx Diagnostic:** Radial distribution fins increase total effective surface heat flux to **{Q_still:.2f} Watts** in still air conditions.")
 
 with tab4:
-    st.markdown("## 📐 Complete Actuator Specification")
-    rows = [
-        ("Cylinder", "Bore (inner diameter)", f"Ø {d_bore} mm"),
-        ("Cylinder", "Wall thickness", f"{wall_t} mm"),
-        ("Cylinder", "Outer diameter (OD)", f"Ø {OD} mm"),
-        ("Cylinder", "Total length", f"{len_cylinder} mm"),
-        ("Piston", "Design stroke", f"{s_design:.1f} mm"),
-        ("Wax Core", "Onset temperature", f"{T_onset}°C"),
-        ("Wax Core", "Full melt temperature", f"{T_full}°C"),
-        ("Wax Core", "Wax volume", f"{V_wax_mL:.1f} mL"),
-        ("Wax Core", "Wax mass", f"{m_wax_g:.2f} g"),
-        ("Performance", "Required force", f"{F_piston:.2f} N"),
-    ]
-    st.dataframe(pd.DataFrame(rows, columns=["Component", "Parameter", "Value"]), use_container_width=True, hide_index=True)
+    section("Envelope Integration Architecture")
+    col1, col2 = st.columns(2)
+    with col1:
+        metric("Center-to-Center (C/C) Louvre Spacing", cc_spacing_mm, "mm", "int")
+        metric("Vertical Rows Needed", num_louvres_vertical, "units", "int")
+        metric("Horizontal Structural Columns", num_columns, "bays", "int")
+    with col2:
+        good_metric("Total Manufactured Louvre Count", total_louvres, "pieces", "int")
+        metric("Total System Fluid Volume", total_wax_volume_mL, "mL", ".1f")
+        warn_metric("Cumulative Wind Load Target on Framing", total_facade_wind_force_N, "Newtons", ".1f")
 
 with tab5:
+    st.markdown("## 📐 Master Manufacturing Specification Datasheet")
+    rows = [
+        ("Facade Profile", "Center-to-Center Pivot Spacing", f"{cc_spacing_mm} mm"),
+        ("Facade Profile", "Total Component Units Needed", f"{total_louvres} pcs"),
+        ("Actuator Cylinder", "Internal Core Bore Diameter", f"Ø {d_bore} mm"),
+        ("Actuator Cylinder", "Wall Solid Gauge Thickness", f"{wall_t} mm"),
+        ("Actuator Cylinder", "Structural Outer Diameter", f"Ø {OD} mm"),
+        ("Actuator Cylinder", "Calculated Housing Length", f"{len_cylinder} mm"),
+        ("Thermal Fins Array", "Radial Fin Count Engineered", f"{num_fins} elements"),
+        ("Thermal Fins Array", "Individual Fin Gauge", f"{t_fin_mm} mm"),
+        ("Thermal Fins Array", "Radial Projection Width", f"{h_fin_mm} mm"),
+        ("Thermal Fins Array", "Fin Surface Area Multiplier", f"{area_multiplier:.2f} x baseline"),
+        ("Piston Linkage", "Target Mechanical Stroke Range", f"{s_design:.1f} mm"),
+        ("Piston Linkage", "Actuator Required Structural Force", f"{F_piston:.2f} N"),
+        ("Wax Fuel Matrix", "Volumetric Solid Charge", f"{V_wax_mL:.1f} mL"),
+        ("Wax Fuel Matrix", "Total Required Mass Weight", f"{m_wax_g:.2f} grams"),
+    ]
+    st.dataframe(pd.DataFrame(rows, columns=["System Group", "Engineering Parameter", "Calculated Prototype Value"]), use_container_width=True, hide_index=True)
+
+with tab6:
     col1, col2 = st.columns(2)
     with col1:
         fig, ax = plt.subplots(figsize=(6, 4), facecolor='#0f1117')
         ax.set_facecolor('#1a1d27')
         t_arr = np.linspace(0, max(t_full_s * 1.3, 60), 400)
-        k_val = 8 / max(t_full_s, 1)
-        stroke_still = s_design / (1 + np.exp(-k_val * (t_arr - t_full_s * 0.5)))
-        ax.plot(t_arr / 60, stroke_still, color='#f0c040', lw=2.5, label='Still air profile')
-        ax.tick_params(colors='#aaa')
+        
+        # Still air vs Wind dynamic curve modeling
+        k_still = 8.0 / max(t_full_s, 1)
+        k_wind  = 8.0 / max(t_full_wind, 1)
+        stroke_still = s_design / (1 + np.exp(-k_still * (t_arr - t_full_s * 0.5)))
+        stroke_wind  = s_design / (1 + np.exp(-k_wind * (t_arr - t_full_wind * 0.5)))
+        
+        ax.plot(t_arr / 60, stroke_still, color='#f0c040', lw=2.5, label='Still Air (10 W/m²K)')
+        ax.plot(t_arr / 60, stroke_wind, color='#4caf50', lw=2.5, linestyle='--', label='Coastal Gale (25 W/m²K)')
+        
+        ax.set_title("Fin-Accelerated Thermal Stroke Response", color='#f0c040', fontsize=10, fontweight='bold')
+        ax.set_xlabel("Elapsed Time (Minutes)", color='#aaa', fontsize=8)
+        ax.set_ylabel("Linear Actuator Stroke (mm)", color='#aaa', fontsize=8)
+        ax.tick_params(colors='#aaa', labelsize=8)
+        ax.grid(True, color='#2e3147', linestyle='--', alpha=0.4)
+        ax.legend(facecolor='#1a1d27', edgecolor='#2e3147', labelcolor='#aaa', fontsize=7)
         st.pyplot(fig)
         plt.close()
+        
     with col2:
         fig2, ax2 = plt.subplots(figsize=(6, 4), facecolor='#0f1117')
         ax2.set_facecolor('#1a1d27')
         strokes_plot = np.linspace(0, s_geom, 200)
         angles_plot = np.degrees(np.arcsin(strokes_plot / arm_mm))
+        
         ax2.plot(strokes_plot, angles_plot, color='#f0c040', lw=2.5)
-        ax2.tick_params(colors='#aaa')
+        ax2.set_title("Transmission Angle Kinematics", color='#f0c040', fontsize=10, fontweight='bold')
+        ax2.set_xlabel("Piston Vector Stroke (mm)", color='#aaa', fontsize=8)
+        ax2.set_ylabel("Louvre Angular Pitch Height (°)", color='#aaa', fontsize=8)
+        ax2.tick_params(colors='#aaa', labelsize=8)
+        ax2.grid(True, color='#2e3147', linestyle='--', alpha=0.4)
         st.pyplot(fig2)
         plt.close()

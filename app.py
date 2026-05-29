@@ -174,14 +174,21 @@ t_onset_s    = (0.15 * Q_melt_J) / max(Q_still, 0.001)
 t_full_s     = (0.80 * Q_melt_J) / max(Q_still, 0.001)
 t_full_wind  = (0.80 * Q_melt_J) / max(Q_wind_val, 0.001)
 
-# 5. SPATIAL BUILDING ASSEMBLIES
-cc_spacing_mm = H_blade - overlap
-num_louvres_vertical = math.ceil((H_wall - overlap) / cc_spacing_mm) if cc_spacing_mm > 0 else 1
-num_columns = math.ceil(W_wall / W_blade) if W_blade > 0 else 1
-total_louvres = num_louvres_vertical * num_columns
+# =====================================================================
+# 5. SPATIAL BUILDING ASSEMBLIES (CORRECTED FOR VERTICAL ORIENTATION)
+# =====================================================================
+# For vertical louvres, the center-to-center pivot spacing steps along the width
+cc_spacing_mm = W_blade - overlap
 
-total_wax_volume_mL = V_wax_mL * total_louvres
-total_facade_wind_force_N = F_wind * total_louvres
+# Number of vertical louvres needed to fill the horizontal width of the opening
+num_columns_horizontal = math.ceil((W_wall - overlap) / cc_spacing_mm) if cc_spacing_mm > 0 else 1
+
+# If you have multiple vertical tiers/rows of windows stacked on top of each other
+num_rows_vertical = math.ceil(H_wall / H_blade) if H_blade > 0 else 1
+total_system_louvres = num_columns_horizontal * num_rows_vertical
+
+total_wax_volume_mL = V_wax_mL * total_system_louvres
+total_facade_wind_force_N = F_wind * total_system_louvres
 
 # =====================================================================
 # FRONTEND INTERFACE GENERATION
@@ -250,19 +257,19 @@ with tab4:
     section("Envelope Integration Architecture")
     col1, col2 = st.columns(2)
     with col1:
-        metric("Center-to-Center (C/C) Louvre Spacing", cc_spacing_mm, "mm", "int")
-        metric("Vertical Rows Needed", num_louvres_vertical, "units", "int")
-        metric("Horizontal Structural Columns", num_columns, "bays", "int")
+        metric("Horizontal Center-to-Center Pivot Spacing", cc_spacing_mm, "mm", "int")
+        metric("Blades per Row (Columns Required)", num_columns_horizontal, "units", "int")
+        metric("Vertical Tiers Stacked (Rows Required)", num_rows_vertical, "tiers", "int")
     with col2:
-        good_metric("Total Manufactured Louvre Count", total_louvres, "pieces", "int")
+        good_metric("Total Vertical Louvre Blades Needed", total_system_louvres, "pieces", "int")
         metric("Total System Fluid Volume", total_wax_volume_mL, "mL", ".1f")
         warn_metric("Cumulative Wind Load Target on Framing", total_facade_wind_force_N, "Newtons", ".1f")
 
 with tab5:
     st.markdown("## 📐 Master Manufacturing Specification Datasheet")
     rows = [
-        ("Facade Profile", "Center-to-Center Pivot Spacing", f"{cc_spacing_mm} mm"),
-        ("Facade Profile", "Total Component Units Needed", f"{total_louvres} pcs"),
+        ("Facade Profile", "Horizontal Center-to-Center Spacing", f"{cc_spacing_mm} mm"),
+        ("Facade Profile", "Total Facade Component Units Needed", f"{total_system_louvres} pcs"),
         ("Actuator Cylinder", "Internal Core Bore Diameter", f"Ø {d_bore} mm"),
         ("Actuator Cylinder", "Wall Solid Gauge Thickness", f"{wall_t} mm"),
         ("Actuator Cylinder", "Structural Outer Diameter", f"Ø {OD} mm"),

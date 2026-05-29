@@ -175,7 +175,7 @@ t_full_s     = (0.80 * Q_melt_J) / max(Q_still, 0.001)
 t_full_wind  = (0.80 * Q_melt_J) / max(Q_wind_val, 0.001)
 
 # =====================================================================
-# 5. SPATIAL BUILDING ASSEMBLIES (CORRECTED FOR VERTICAL ORIENTATION)
+# 5. SPATIAL BUILDING ASSEMBLIES (SMART ARCHITECTURAL ROUNDING)
 # =====================================================================
 # For vertical louvres, the center-to-center pivot spacing steps along the width
 cc_spacing_mm = W_blade - overlap
@@ -183,8 +183,8 @@ cc_spacing_mm = W_blade - overlap
 # Number of vertical louvres needed to fill the horizontal width of the opening
 num_columns_horizontal = math.ceil((W_wall - overlap) / cc_spacing_mm) if cc_spacing_mm > 0 else 1
 
-# If you have multiple vertical tiers/rows of windows stacked on top of each other
-num_rows_vertical = math.ceil(H_wall / H_blade) if H_blade > 0 else 1
+# Smart rounding for vertical tiers: if the leftover gap is tiny, use a frame casing instead of an extra row
+num_rows_vertical = max(int(round(H_wall / H_blade)), 1) if H_blade > 0 else 1
 total_system_louvres = num_columns_horizontal * num_rows_vertical
 
 total_wax_volume_mL = V_wax_mL * total_system_louvres

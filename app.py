@@ -196,13 +196,14 @@ with c4: metric("Piston Rod Length", len_piston_rod,   "mm",   ".1f")
 with c5: metric("Effective Area Ratio", area_multiplier, "x Base", ".1f")
 with c6: metric("First response",    t_onset_s/60,     "min",  ".1f")
 
-# Tab Initialization
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+# Tab Initialization (REARRANGED SECTIONS)
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "🪵 Louvre & Torque Loads", 
     "🔩 Internal Hydraulics", 
     "🧪 Thermal Fins Performance", 
     "🧱 Facade Envelope Architecture", 
     "📐 Dynamic Architectural Drawings", 
+    "📋 Manufacturing Specifications Table", 
     "📈 Transient Fluid Response Curves"
 ])
 
@@ -265,16 +266,10 @@ with tab5:
         fig_plan, ax_plan = plt.subplots(figsize=(6, 5), facecolor='#0f1117')
         ax_plan.set_facecolor('#1a1d27')
         
-        # Plot 3 sequential vertical blades looking from the top down
         for i in range(3):
             pivot_x = i * cc_spacing_mm
             pivot_y = 0
             
-            # Base rectangular block of the timber louvre plank rotated around center
-            unrotated_x = -W_blade / 2
-            unrotated_y = -T_blade / 2
-            
-            # Matplotlib rotated rectangle patch
             ts = ax_plan.transData
             tr = mtransforms.Affine2D().rotate_around(pivot_x, pivot_y, angle_rad) + ts
             
@@ -285,12 +280,10 @@ with tab5:
             )
             ax_plan.add_patch(rect)
             
-            # Draw Pivot Center Pin Axis
             ax_plan.plot(pivot_x, pivot_y, 'o', color='#ff9800', markersize=6)
             if i == 0:
                 ax_plan.text(pivot_x, pivot_y + T_blade*1.5, "Pivot Pin Track", color='#aaa', fontsize=7, ha='center')
         
-        # Label Spacing Lines
         ax_plan.annotate('', xy=(0, -W_blade*0.4), xytext=(cc_spacing_mm, -W_blade*0.4),
                          arrowprops=dict(arrowstyle='<->', edgecolor='#7ecfff'))
         ax_plan.text(cc_spacing_mm/2, -W_blade*0.6, f"C/C Spacing: {cc_spacing_mm:.0f}mm", color='#7ecfff', fontsize=8, ha='center')
@@ -307,19 +300,15 @@ with tab5:
         fig_sec, ax_sec = plt.subplots(figsize=(6, 5), facecolor='#0f1117')
         ax_sec.set_facecolor('#1a1d27')
         
-        # Draw structural wall opening limit framing box boundaries
         wall_box = patches.Rectangle((-50, 0), 100, H_wall, linewidth=2, edgecolor='#333', facecolor='none', linestyle='--')
         ax_sec.add_patch(wall_box)
         
-        # Programmatically plot stacked tiers based on your smart math rounding output
         for r in range(num_rows_vertical):
             base_y = r * H_blade
             
-            # Draw individual upright standing profile block
             blade_box = patches.Rectangle((-T_blade/2, base_y), T_blade, H_blade, linewidth=1.5, edgecolor='#4caf50', facecolor='#4caf50', alpha=0.4)
             ax_sec.add_patch(blade_box)
             
-            # Centerlines
             ax_sec.plot(0, base_y + H_blade/2, 'x', color='#ff5722', markersize=5)
             ax_sec.text(T_blade * 1.2, base_y + H_blade/2, f"Tier {r+1}", color='#aaa', fontsize=7, va='center')
             
@@ -332,8 +321,8 @@ with tab5:
         st.pyplot(fig_sec)
         plt.close()
 
-    st.markdown("---")
-    st.markdown("## 📐 Master Manufacturing Specification Datasheet")
+with tab6:
+    st.markdown("## 📋 Master Manufacturing Specification Datasheet")
     rows = [
         ("Facade Profile", "Horizontal Center-to-Center Spacing", f"{cc_spacing_mm} mm"),
         ("Facade Profile", "Total Facade Component Units Needed", f"{total_system_louvres} pcs"),
@@ -353,7 +342,7 @@ with tab5:
     ]
     st.dataframe(pd.DataFrame(rows, columns=["System Group", "Engineering Parameter", "Calculated Prototype Value"]), use_container_width=True, hide_index=True)
 
-with tab6:
+with tab7:
     col1, col2 = st.columns(2)
     with col1:
         fig, ax = plt.subplots(figsize=(6, 4), facecolor='#0f1117')

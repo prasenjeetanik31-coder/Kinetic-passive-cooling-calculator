@@ -35,11 +35,11 @@ def metric(label, value, unit, fmt=".2f"):
     st.markdown(f'<div class="metric-box"><div class="metric-label">{label}</div><div class="metric-value">{val_str} <span class="metric-unit">{unit}</span></div></div>', unsafe_allow_html=True)
 
 def good_metric(label, value, unit, fmt=".2f"):
-    val_str = f"{value:{fmt}}"
+    val_str = str(int(round(value))) if fmt == "int" else f"{value:{fmt}}"
     st.markdown(f'<div class="highlight-box"><div class="metric-label">✅ {label}</div><div class="metric-value" style="color:#4caf50">{val_str} <span class="metric-unit">{unit}</span></div></div>', unsafe_allow_html=True)
 
 def warn_metric(label, value, unit, fmt=".2f"):
-    val_str = f"{value:{fmt}}"
+    val_str = str(int(round(value))) if fmt == "int" else f"{value:{fmt}}"
     st.markdown(f'<div class="warn-box"><div class="metric-label">⚠️ {label}</div><div class="metric-value" style="color:#ff9800">{val_str} <span class="metric-unit">{unit}</span></div></div>', unsafe_allow_html=True)
 
 def eq(text): st.markdown(f'<span class="eq">{text}</span>', unsafe_allow_html=True)

@@ -3,6 +3,7 @@ import math
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
+import matplotlib.patches as patches
 
 st.set_page_config(
     page_title="Kinetic Passive Cooling — Advanced Actuator Calculator",
@@ -53,11 +54,11 @@ with st.sidebar:
     st.markdown("---")
     
     st.markdown("### 🪵 Louvre Blade Profile")
-    H_blade   = st.slider("Blade height (mm)",        300, 1800, 600, 50)
-    W_blade   = st.slider("Blade width (mm)",          60, 300,  100,  5)
+    H_blade   = st.slider("Blade height (mm)",        300, 1800, 700, 50)
+    W_blade   = st.slider("Blade width (mm)",          60, 300,  150,  5)
     T_blade   = st.slider("Blade thickness (mm)",      10,  40,   18,  2)
     rho_blade = st.slider("Timber density (kg/m³)",   400, 900,  720,  10)
-    angle_deg = st.slider("Target rotation (°)",       20,  90,   45,  5)
+    angle_deg = st.slider("Target rotation (°)",       0,  90,   45,  5)
     st.markdown("---")
     
     st.markdown("### 🌡️ Thermal Boundaries")
@@ -88,18 +89,17 @@ with st.sidebar:
     st.markdown("---")
     
     st.markdown("### 🧱 Facade Surface Assembly")
-    H_wall    = st.slider("Total Opening Height (mm)", 1000, 5000, 3000, 100)
+    H_wall    = st.slider("Total Opening Height (mm)", 1000, 5000, 1500, 100)
     W_wall    = st.slider("Total Opening Width (mm)",  600, 4000, 1200, 100)
     overlap   = st.slider("Weather overlap (mm)",    5, 50, 20, 5)
 
 # =====================================================================
 # UNIFIED MATHEMATICAL MODEL ENGINE
 # =====================================================================
-# Hardcoded physical parameters locked straight from detailed blueprints
-d_bore       = 18.0         # Internal bore diameter (18 mm)
-wall_t       = 3.0          # Heavy-duty cylinder wall (3 mm)
-OD           = 24.0         # Resulting cylinder outer diameter (24 mm)
-k_brass      = 115.0        # Thermal conductivity of Yellow Brass (W/m·K)
+d_bore       = 18.0         
+wall_t       = 3.0          
+OD           = 24.0         
+k_brass      = 115.0        
 
 H = H_blade / 1000          
 W = W_blade / 1000          
@@ -107,83 +107,71 @@ T = T_blade / 1000
 angle_rad = math.radians(angle_deg)
 beta = wax_expansion / 100
 
-# 1. Component Mass & Load Profiles
 V_blade_m3 = H * W * T
 mass_blade  = rho_blade * V_blade_m3
 area_blade  = H * W
 
-# 2. Advanced Combined Torques Engine (Strict N·mm Normalization)
 N_bearing   = mass_blade * 9.81
 T_friction  = mu * N_bearing * r_pivot 
 
 F_wind      = wind_pa * area_blade
-eccentricity_mm = W_blade * 0.10   # Aerodynamic twisting offset
+eccentricity_mm = W_blade * 0.10   
 T_wind      = F_wind * eccentricity_mm
 
 T_raw       = T_friction + T_wind
 T_design    = T_raw * SF
 F_piston    = T_design / arm_mm
 
-# 3. Stroke & Cylinder Dimensional Boundaries
 A_piston_m2 = math.pi / 4 * (d_bore / 1000) ** 2
 F_capacity  = wax_pressure * 1e6 * A_piston_m2
 force_margin = F_capacity / max(F_piston, 0.001)
 
 s_geom      = arm_mm * math.sin(angle_rad)
 s_design    = s_geom
+
+# PISTON ROD CALCULATION
+internal_guide = d_bore * 1.2    
+external_link  = 15.0            
+len_piston_rod = s_design + internal_guide + external_link
+
 V_stroke_mL = A_piston_m2 * (s_design / 1000) * 1e6
 V_wax_mL    = V_stroke_mL / beta
 h_wax_mm    = (V_wax_mL * 1e-6 / A_piston_m2) * 1000
 m_wax_g     = V_wax_mL * wax_density
 Q_melt_J    = (m_wax_g / 1000) * (wax_latent * 1000)
 
-len_cylinder = math.ceil(h_wax_mm + (d_bore * 1.2) + s_design + 20)
+len_cylinder = math.ceil(h_wax_mm + internal_guide + s_design + 20)
 
-# 4. RADIAL FIN HEAT EXCHANGER ENGINE
 t_fin_m = t_fin_mm / 1000
 h_fin_m = h_fin_mm / 1000
 h_finned_zone_m = h_wax_mm / 1000
 
-# Unfinned Base Surface Area vs Extended Surface Fin Area Calculations
 A_base_unfinned = (math.pi * (OD / 1000) * h_finned_zone_m) - (num_fins * t_fin_m * h_finned_zone_m)
 A_fins_surface  = num_fins * (2.0 * h_fin_m * h_finned_zone_m)
 A_total_finned  = A_base_unfinned + A_fins_surface
 
-# Pure Unfinned Reference Case for UI Comparisons
 A_plain_cyl = math.pi * (OD / 1000) * h_finned_zone_m
 area_multiplier = A_total_finned / max(A_plain_cyl, 0.001)
 
-# Convective Coefficients and Fin Efficiency Calculations
 h_conv_still = 10.0
 h_conv_wind  = 25.0
 dT           = max(T_ambient - T_onset, 1)
 
-# Analytical Fin Efficiency (m) formula for longitudinal fins
 m_fin_param  = math.sqrt((2.0 * h_conv_still) / max(k_brass * t_fin_m, 1e-6))
 fin_efficiency = math.tanh(m_fin_param * h_fin_m) / (m_fin_param * h_fin_m) if m_fin_param > 0 else 1.0
 
-# Total Effective Heat Transfer Area accounting for efficiency
 A_effective = A_base_unfinned + (fin_efficiency * A_fins_surface)
 
-# Thermal Flux Vectors
 Q_still      = h_conv_still * A_effective * dT
 Q_wind_val   = h_conv_wind  * A_effective * dT
 
-# Normalized Heat Capture Timelines
 t_onset_s    = (0.15 * Q_melt_J) / max(Q_still, 0.001)
 t_full_s     = (0.80 * Q_melt_J) / max(Q_still, 0.001)
 t_full_wind  = (0.80 * Q_melt_J) / max(Q_wind_val, 0.001)
 
-# =====================================================================
-# 5. SPATIAL BUILDING ASSEMBLIES (SMART ARCHITECTURAL ROUNDING)
-# =====================================================================
-# For vertical louvres, the center-to-center pivot spacing steps along the width
+# SPATIAL RUN LAYOUT (WITH SMART ROUNDING)
 cc_spacing_mm = W_blade - overlap
-
-# Number of vertical louvres needed to fill the horizontal width of the opening
 num_columns_horizontal = math.ceil((W_wall - overlap) / cc_spacing_mm) if cc_spacing_mm > 0 else 1
-
-# Smart rounding for vertical tiers: if the leftover gap is tiny, use a frame casing instead of an extra row
 num_rows_vertical = max(int(round(H_wall / H_blade)), 1) if H_blade > 0 else 1
 total_system_louvres = num_columns_horizontal * num_rows_vertical
 
@@ -203,7 +191,7 @@ c1, c2, c3, c4, c5, c6 = st.columns(6)
 with c1: metric("Bore diameter",     d_bore,           "mm",   "int")
 with c2: metric("Cylinder OD",       OD,               "mm",   "int")
 with c3: metric("Cylinder length",   len_cylinder,     "mm",   "int")
-with c4: metric("Piston stroke",     s_design,         "mm",   ".1f")
+with c4: metric("Piston Rod Length", len_piston_rod,   "mm",   ".1f")
 with c5: metric("Effective Area Ratio", area_multiplier, "x Base", ".1f")
 with c6: metric("First response",    t_onset_s/60,     "min",  ".1f")
 
@@ -213,7 +201,7 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "🔩 Internal Hydraulics", 
     "🧪 Thermal Fins Performance", 
     "🧱 Facade Envelope Architecture", 
-    "📐 Engineering Specifications Table", 
+    "📐 Dynamic Architectural Drawings", 
     "📈 Transient Fluid Response Curves"
 ])
 
@@ -266,6 +254,84 @@ with tab4:
         warn_metric("Cumulative Wind Load Target on Framing", total_facade_wind_force_N, "Newtons", ".1f")
 
 with tab5:
+    st.markdown("## 📐 Live Parametric Plan & Section Projections")
+    st.caption("These drawings update vector geometries in real-time as you drag the profile controllers.")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("### 🗺️ Top-Down Plan View (Horizontal Array Layout)")
+        fig_plan, ax_plan = plt.subplots(figsize=(6, 5), facecolor='#0f1117')
+        ax_plan.set_facecolor('#1a1d27')
+        
+        # Plot 3 sequential vertical blades looking from the top down
+        for i in range(3):
+            pivot_x = i * cc_spacing_mm
+            pivot_y = 0
+            
+            # Base rectangular block of the timber louvre plank rotated around center
+            unrotated_x = -W_blade / 2
+            unrotated_y = -T_blade / 2
+            
+            # Matplotlib rotated rectangle patch
+            ts = ax_plan.transData
+            tr = plt.transforms.Affine2D().rotate_around(pivot_x, pivot_y, angle_rad) + ts
+            
+            rect = patches.Rectangle(
+                (pivot_x - W_blade/2, pivot_y - T_blade/2), 
+                W_blade, T_blade, 
+                linewidth=1.5, edgecolor='#f0c040', facecolor='#f0c040', alpha=0.35, transform=tr
+            )
+            ax_plan.add_patch(rect)
+            
+            # Draw Pivot Center Pin Axis
+            ax_plan.plot(pivot_x, pivot_y, 'o', color='#ff9800', markersize=6)
+            if i == 0:
+                ax_plan.text(pivot_x, pivot_y + T_blade*1.5, "Pivot Pin Track", color='#aaa', fontsize=7, ha='center')
+        
+        # Label Spacing Lines
+        ax_plan.annotate('', xy=(0, -W_blade*0.4), xytext=(cc_spacing_mm, -W_blade*0.4),
+                         arrowprops=dict(arrowstyle='<->', edgecolor='#7ecfff'))
+        ax_plan.text(cc_spacing_mm/2, -W_blade*0.6, f"C/C Spacing: {cc_spacing_mm:.0f}mm", color='#7ecfff', fontsize=8, ha='center')
+        
+        ax_plan.set_xlim(-W_blade, cc_spacing_mm * 2.5)
+        ax_plan.set_ylim(-W_blade, W_blade)
+        ax_plan.set_aspect('equal')
+        ax_plan.axis('off')
+        st.pyplot(fig_plan)
+        plt.close()
+
+    with col2:
+        st.markdown("### 🏢 Sectional Cut (Vertical Tier Stacking)")
+        fig_sec, ax_sec = plt.subplots(figsize=(6, 5), facecolor='#0f1117')
+        ax_sec.set_facecolor('#1a1d27')
+        
+        # Draw structural wall opening limit framing box boundaries
+        wall_box = patches.Rectangle((-50, 0), 100, H_wall, linewidth=2, edgecolor='#333', facecolor='none', linestyle='--')
+        ax_sec.add_patch(wall_box)
+        
+        # Programmatically plot stacked tiers based on your smart math rounding output
+        for r in range(num_rows_vertical):
+            base_y = r * H_blade
+            
+            # Draw individual upright standing profile block
+            blade_box = patches.Rectangle((-T_blade/2, base_y), T_blade, H_blade, linewidth=1.5, edgecolor='#4caf50', facecolor='#4caf50', alpha=0.4)
+            ax_sec.add_patch(blade_box)
+            
+            # Centerlines
+            ax_sec.plot(0, base_y + H_blade/2, 'x', color='#ff5722', markersize=5)
+            ax_sec.text(T_blade * 1.2, base_y + H_blade/2, f"Tier {r+1}", color='#aaa', fontsize=7, va='center')
+            
+        ax_sec.set_xlim(-150, 150)
+        ax_sec.set_ylim(-100, max(H_wall, H_blade * num_rows_vertical) + 100)
+        ax_sec.set_ylabel("Opening Height Axis (mm)", color='#aaa', fontsize=8)
+        ax_sec.tick_params(colors='#aaa', labelsize=7)
+        ax_sec.grid(True, color='#2e3147', linestyle=':', alpha=0.3)
+        ax_sec.set_aspect('equal', adjustable='box')
+        st.pyplot(fig_sec)
+        plt.close()
+
+    st.markdown("---")
     st.markdown("## 📐 Master Manufacturing Specification Datasheet")
     rows = [
         ("Facade Profile", "Horizontal Center-to-Center Spacing", f"{cc_spacing_mm} mm"),
@@ -278,7 +344,8 @@ with tab5:
         ("Thermal Fins Array", "Individual Fin Gauge", f"{t_fin_mm} mm"),
         ("Thermal Fins Array", "Radial Projection Width", f"{h_fin_mm} mm"),
         ("Thermal Fins Array", "Fin Surface Area Multiplier", f"{area_multiplier:.2f} x baseline"),
-        ("Piston Linkage", "Target Mechanical Stroke Range", f"{s_design:.1f} mm"),
+        ("Piston Linkage", "Kinetic Piston Stroke (Movement)", f"{s_design:.1f} mm"),
+        ("Piston Linkage", "Physical Cutting Rod Length", f"{len_piston_rod:.1f} mm"),
         ("Piston Linkage", "Actuator Required Structural Force", f"{F_piston:.2f} N"),
         ("Wax Fuel Matrix", "Volumetric Solid Charge", f"{V_wax_mL:.1f} mL"),
         ("Wax Fuel Matrix", "Total Required Mass Weight", f"{m_wax_g:.2f} grams"),
@@ -292,7 +359,6 @@ with tab6:
         ax.set_facecolor('#1a1d27')
         t_arr = np.linspace(0, max(t_full_s * 1.3, 60), 400)
         
-        # Still air vs Wind dynamic curve modeling
         k_still = 8.0 / max(t_full_s, 1)
         k_wind  = 8.0 / max(t_full_wind, 1)
         stroke_still = s_design / (1 + np.exp(-k_still * (t_arr - t_full_s * 0.5)))
@@ -311,16 +377,5 @@ with tab6:
         plt.close()
         
     with col2:
-        fig2, ax2 = plt.subplots(figsize=(6, 4), facecolor='#0f1117')
-        ax2.set_facecolor('#1a1d27')
-        strokes_plot = np.linspace(0, s_geom, 200)
-        angles_plot = np.degrees(np.arcsin(strokes_plot / arm_mm))
-        
-        ax2.plot(strokes_plot, angles_plot, color='#f0c040', lw=2.5)
-        ax2.set_title("Transmission Angle Kinematics", color='#f0c040', fontsize=10, fontweight='bold')
-        ax2.set_xlabel("Piston Vector Stroke (mm)", color='#aaa', fontsize=8)
-        ax2.set_ylabel("Louvre Angular Pitch Height (°)", color='#aaa', fontsize=8)
-        ax2.tick_params(colors='#aaa', labelsize=8)
-        ax2.grid(True, color='#2e3147', linestyle='--', alpha=0.4)
-        st.pyplot(fig2)
-        plt.close()
+        st.markdown("### 🔩 Actuator Component Spec Vector")
+        st.info("ℹ️ **Physical Device Profile:** Cylinder housing maps out to an absolute structural length boundary of **`" + str(len_cylinder) + " mm`** to fully encompass the thermal fluid reservoir chamber charge weight safely.")
